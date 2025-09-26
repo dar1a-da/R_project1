@@ -1,0 +1,84 @@
+---
+title: "day"
+author: "Daria Chekanova"
+date: "2025-09-26"
+bibliography: packages.bib
+output: 
+  html_document:
+    latex_engine : xelatex
+    df_print: default
+    highlight: zenburn
+    toc: TRUE
+    toc_depth: 3
+mainfont : NanumGothic    
+editor_options: 
+  markdown: 
+    wrap: 72
+---
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+Смотрим структуру данных
+```{r}
+df <- read.csv("day.csv")
+df
+str(df)
+summary(df)
+```
+Ищем пропущенные значения (NA и пропуски)
+```{r}
+sum(is.na(df))
+```
+NA присутствуют в 4-х переменных, в строках не пересекаются. 
+В переменной hum 4 из 5 NA расположены попарно через 1 наблюдение. Проверим случайность распределения NA в hum относительно переменной без NA (например, atemp).
+H0: средняя температура не отличается между строками, где hum есть и где hum пропущен.
+p-value > 0.05 → пропуски в hum распределены случайно относительно atemp.
+p-value < 0.05 → пропуски в hum зависят от atemp.
+```{r}
+t.test(atemp ~ is.na(hum), data = df)
+```
+Так как пропуски распределены случайно и их количество меньше 1% от всех наблюдений, удалим NA.
+```{r}
+df_nona <- na.omit(df)
+summary(df_nona)
+```
+Посмотрим, есть ли пустые значения ""
+```{r}
+sum(df == "", na.rm = TRUE)
+```
+Пустых значений нет.
+
+Категориальные величины. Конвертируем из численных в факторные season, yr, mnth, holyday, weekday ??, workingday, weathersit
+```{r}
+df$season <- as.factor(df$season)
+df$yr <- as.factor(df$yr)
+df$mnth <- as.factor(df$mnth)
+df$holiday <- as.factor(df$holiday)
+df$weekday <- as.factor(df$weekday)
+df$workingday <- as.factor(df$workingday)
+df$weathersit <- as.factor(df$weathersit)
+
+#summary(bic)
+```
+Выбросы
+```{r}
+#plot(df$temp)
+#plot(df$atemp)
+#plot(df$hum)
+plot(df)
+
+```
+
+
+```{r}
+
+```
+
+
+
+
+
+
+
+
+
