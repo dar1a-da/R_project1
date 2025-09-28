@@ -1,0 +1,168 @@
+---
+title: "day"
+author: "Daria Chekanova"
+date: "2025-09-26"
+bibliography: packages.bib
+output: 
+  html_document:
+    latex_engine : xelatex
+    df_print: default
+    highlight: zenburn
+    toc: TRUE
+    toc_depth: 3
+mainfont : NanumGothic    
+editor_options: 
+  markdown: 
+    wrap: 72
+---
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+```{r}
+install.packages("ggbeeswarm")
+install.packages("tidyr")
+```
+
+Смотрим структуру данных
+```{r}
+df <- read.csv("day.csv")
+df
+str(df)
+summary(df)
+```
+Ищем пропущенные значения (NA и пропуски)
+```{r}
+sum(is.na(df))
+```
+NA присутствуют в 4-х переменных, в строках не пересекаются. 
+В переменной hum 4 из 5 NA расположены попарно через 1 наблюдение. Проверим случайность распределения NA в hum относительно переменной без NA (например, atemp).
+H0: средняя температура не отличается между строками, где hum есть и где hum пропущен.
+Н1: средняя температура различается между строками, где hum есть и где hum пропущен.
+p-value > 0.05 → пропуски в hum распределены случайно относительно atemp.
+p-value < 0.05 → пропуски в hum зависят от atemp.
+```{r}
+t.test(atemp ~ is.na(hum), data = df)
+```
+Так как пропуски распределены случайно и их количество меньше 1% от всех наблюдений, удалим NA.
+```{r}
+df_nona <- na.omit(df)
+summary(df_nona)
+```
+Посмотрим, есть ли пустые значения ""
+```{r}
+sum(df == "", na.rm = TRUE)
+```
+Пустых значений нет.
+
+Категориальные величины. Конвертируем из численных в факторные season, yr, mnth, holyday, weekday, workingday, weathersit
+```{r}
+df_nona$season <- as.factor(df_nona$season)
+df_nona$yr <- as.factor(df_nona$yr)
+df_nona$mnth <- as.factor(df_nona$mnth)
+df_nona$holiday <- as.factor(df_nona$holiday)
+df_nona$weekday <- as.factor(df_nona$weekday)
+df_nona$workingday <- as.factor(df_nona$workingday)
+df_nona$weathersit <- as.factor(df_nona$weathersit)
+```
+Выбросы
+```{r}
+#plot(df$temp)
+#plot(df$atemp)
+#plot(df$hum)
+#plot(df_nona)
+
+```
+Гипотезы
+Н0 количество поездок зарегистрированных и случайных пользователей не зависит от того, какой день - рабочий или выходной.
+Н1 количество поездок зарегистрированных и случайных пользователей зависит от того рабочий или выходной день, в выходные дни случайных и зарегистрированных пользователей будет больше, чем в рабочие дни.
+Фиксируем уровень значимости 5%.
+Проверим данные случайных пользователей на нормальность.
+
+```{r}
+qqnorm(df_nona$casual)
+qqline(df_nona$casual)
+```
+```{r}
+shapiro.test(df_nona$casual)
+```
+Данные casual распределены ненормально, так как график отклоняется от прямой и тест шапиро-вилка показал низкое p-value, и мы отвергаем нулевую гипотезу о нормальности распределения.
+Проверим нормальность распределения зарегистрированных пользователей.
+```{r}
+qqnorm(df_nona$registered)
+qqline(df_nona$registered)
+```
+```{r}
+shapiro.test(df_nona$registered)
+```
+По результатам теста Shapiro-Wilk данные распределены не нормально, но данный тест может быть ложноотрицательным для больших (>30) выборок. По QQ-плоту видим от -1 до 2 теоретических квантилей данные распределены нормально, но имеются хвосты нарушающие нормальность. Распределение зарегистрированных пользователей не является нормальным, но в центральной части схоже с нормальным.
+
+Для проверки наших гипотез будем использовать тест Манна-Уитни, так как он не требует нормального распределения и подходит для независимых выборок.
+
+```{r}
+df_nona$workingday <- factor(df_nona$workingday,
+                             levels = c(0, 1),
+                             labels = c("Weekend", "Workday"))
+```
+
+```{r}
+wilcox.test(casual ~ workingday, data = df_nona, correct = FALSE, alternative = "greater")
+```
+
+По результатам теста Вилкоксона отвергаем нулевую гипотезу об одинаковом количестве поездок случайных пользователей в рабочий и выходной дни, медиана в первой группе "Weekend" больше, чем в "Workday", значит в выходные дни количество поездок случайных пользователей больше.
+
+```{r}
+wilcox.test(registered ~ workingday, data = df_nona, correct = F, alternative = "greater")
+```
+По результатам теста Вилкоксона отвергаем нулевую гипотезу об одинаковом количестве поездок зарегистрированных пользователей в рабочий и выходной дни, медиана в первой группе "Weekend" больше, чем в "Workday", значит в выходные дни количество поездок зарегистрированных пользователей больше, чем в рабочие дни.
+
+Построим график, отображающий количество поездок случайных и зарегистрированных пользователей в рабочие и нерабочие дни. Красными линиями показаны медианы.
+```{r}
+library(ggplot2)
+library(ggbeeswarm)
+library(tidyr)
+
+df_long <- df_nona %>%
+  pivot_longer(cols = c(casual, registered),
+               names_to = "user_type",
+               values_to = "rides")
+
+ggplot(df_long, aes(x = workingday, y = rides, color = user_type)) +
+  geom_violin(aes(fill = workingday), alpha = 0.15, width = 0.85,
+              position = position_dodge(width = 0.8), trim = FALSE) +
+  ggbeeswarm::geom_quasirandom(dodge.width = 0.8, size = 1.5, alpha = 0.6) +
+  stat_summary(fun = median, geom = "crossbar",
+               aes(group = user_type),
+               width = 0.4, fatten = 1, size = 1.0, color = "red",
+               position = position_dodge(width = 0.8)) +
+  labs(title = "Bike rides by user type and day",
+       x = NULL, y = "Number of rides",
+       color = "User type") +
+  theme_minimal(base_size = 14) +
+  theme(panel.grid.minor = element_blank())
+
+```
+```{r}
+
+```
+
+```{r}
+
+```
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+
+
+
+
+
+
